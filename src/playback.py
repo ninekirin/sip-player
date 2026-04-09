@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Callable
 
 import pjsua2 as pj
 
+from src.i18n import _, translate_fmt
+
 if TYPE_CHECKING:
     from src.sip_stack import SipApp
 
@@ -52,11 +54,23 @@ class PlaybackController:
 
     def status_line(self) -> str:
         if not self.paths:
-            return "无曲目（请添加 16-bit PCM 单声道 WAV）"
+            return _("无曲目（请添加 16-bit PCM 单声道 WAV）")
         name = self.paths[self._index].split("/")[-1]
-        mode_s = ("顺序", "列表循环", "单曲循环", "随机")[int(self.mode)]
-        ps = "暂停" if self.paused else "播放"
-        return f"{ps} | {name} | 模式: {mode_s} | [{self._index + 1}/{len(self.paths)}]"
+        mode_s = (
+            _("顺序"),
+            _("列表循环"),
+            _("单曲循环"),
+            _("随机"),
+        )[int(self.mode)]
+        ps = _("暂停") if self.paused else _("播放")
+        return translate_fmt(
+            "{ps} | {name} | 模式: {mode_s} | [{idx}/{total}]",
+            ps=ps,
+            name=name,
+            mode_s=mode_s,
+            idx=self._index + 1,
+            total=len(self.paths),
+        )
 
     def add_call_audio(self, session_id: int, audio: pj.AudioMedia) -> None:
         self._call_audios[session_id] = audio
@@ -84,7 +98,7 @@ class PlaybackController:
         if n == 0:
             return
         if self.mode == PlayMode.SEQUENTIAL and self._index >= n - 1:
-            self._app.log("顺序模式：最后一首已结束")
+            self._app.log(_("顺序模式：最后一首已结束"))
             return
         self._advance_after_track_finished()
         self._reload_stream()
@@ -165,7 +179,7 @@ class PlaybackController:
             self._player.createPlayer(path, self._player_options())
         except pj.Error:
             self._player = None
-            self._app.log(f"无法打开音频文件: {path}")
+            self._app.log(translate_fmt("无法打开音频文件: {path}", path=path))
         self._sync_transmit()
         self._app.notify_playback_changed()
 
@@ -182,4 +196,4 @@ class PlaybackController:
                 try:
                     self._player.startTransmit(aud)
                 except pj.Error as e:
-                    self._app.log(f"startTransmit 失败: {e}")
+                    self._app.log(translate_fmt("startTransmit 失败: {e}", e=e))

@@ -8,6 +8,7 @@ from typing import Callable
 
 import pjsua2 as pj
 
+from src.i18n import _, translate_fmt
 from src.playback import PlaybackController
 
 
@@ -19,7 +20,7 @@ class SipCall(pj.Call):
 
     def onCallState(self, prm: pj.OnCallStateParam) -> None:
         ci = self.getInfo()
-        self._app.log(f"通话状态: {ci.stateText}")
+        self._app.log(translate_fmt("通话状态: {text}", text=ci.stateText))
         if ci.state == pj.PJSIP_INV_STATE_DISCONNECTED:
             self._app.on_call_disconnected(self)
 
@@ -34,7 +35,7 @@ class SipCall(pj.Call):
 
     def onDtmfDigit(self, prm: pj.OnDtmfDigitParam) -> None:
         d = prm.digit
-        self._app.log(f"DTMF: {d}")
+        self._app.log(translate_fmt("DTMF: {d}", d=d))
         self._app.handle_dtmf(d)
 
 
@@ -46,8 +47,13 @@ class SipAccount(pj.Account):
     def onRegState(self, prm: pj.OnRegStateParam) -> None:
         ai = self.getInfo()
         self._app.log(
-            f"注册: code={ai.regStatus} {ai.regStatusText} "
-            f"active={ai.regIsActive} expires={ai.regExpiresSec}s"
+            translate_fmt(
+                "注册: code={code} {text} active={active} expires={exp}s",
+                code=ai.regStatus,
+                text=ai.regStatusText,
+                active=ai.regIsActive,
+                exp=ai.regExpiresSec,
+            )
         )
         self._app.notify_reg_changed()
 
@@ -58,7 +64,7 @@ class SipAccount(pj.Account):
         op = pj.CallOpParam(True)
         op.statusCode = pj.PJSIP_SC_OK
         c.answer(op)
-        self._app.log(f"来电已自动接听 (会话 {sid})")
+        self._app.log(translate_fmt("来电已自动接听 (会话 {sid})", sid=sid))
 
 
 class SipApp:
@@ -118,7 +124,7 @@ class SipApp:
         self._ep.libStart()
         self._ep.audDevManager().setNullDev()
         self._started = True
-        self.log("PJSIP 已启动（空音频设备，仅向对端送音）")
+        self.log(_("PJSIP 已启动（空音频设备，仅向对端送音）"))
 
     def shutdown_stack(self) -> None:
         if not self._started:
@@ -159,12 +165,12 @@ class SipApp:
 
         self._acc = SipAccount(self)
         self._acc.create(cfg)
-        self.log(f"正在注册 {registrar} …")
+        self.log(translate_fmt("正在注册 {registrar} …", registrar=registrar))
 
     def unregister(self) -> None:
         if self._acc:
             self._acc.setRegistration(False)
-            self.log("已请求注销")
+            self.log(_("已请求注销"))
 
     def next_session_id(self) -> int:
         sid = self._next_sid
@@ -178,7 +184,7 @@ class SipApp:
         if call.session_id in self._active_calls:
             del self._active_calls[call.session_id]
             self.playback.remove_call_audio(call.session_id)
-            self.log(f"通话已结束 (会话 {call.session_id})")
+            self.log(translate_fmt("通话已结束 (会话 {sid})", sid=call.session_id))
 
     def handle_dtmf(self, digit: str) -> None:
         if digit == "1":
@@ -195,15 +201,19 @@ class SipApp:
 
     def registration_status_text(self) -> str:
         if not self._acc or not self._acc.isValid():
-            return "未注册"
+            return _("未注册")
         ai = self._acc.getInfo()
         if ai.regIsActive:
-            return f"已注册 ({ai.regExpiresSec}s)"
-        return f"未成功: {ai.regStatus} {ai.regStatusText}"
+            return translate_fmt("已注册 ({exp}s)", exp=ai.regExpiresSec)
+        return translate_fmt(
+            "未成功: {code} {text}",
+            code=ai.regStatus,
+            text=ai.regStatusText,
+        )
 
     def hangup_call(self) -> None:
         if not self._active_calls:
-            self.log("当前无活跃通话")
+            self.log(_("当前无活跃通话"))
             return
         for call in list(self._active_calls.values()):
             try:
@@ -212,7 +222,7 @@ class SipApp:
                     call.hangup(prm)
             except pj.Error:
                 pass
-        self.log("已发送挂断全部")
+        self.log(_("已发送挂断全部"))
 
     def hangup_call_by_id(self, session_id: int) -> None:
         call = self._active_calls.get(session_id)
@@ -221,9 +231,9 @@ class SipApp:
                 if call.isActive():
                     prm = pj.CallOpParam(True)
                     call.hangup(prm)
-                    self.log(f"已挂断会话 {session_id}")
+                    self.log(translate_fmt("已挂断会话 {sid}", sid=session_id))
             except pj.Error as e:
-                self.log(f"挂断会话 {session_id} 失败: {e}")
+                self.log(translate_fmt("挂断会话 {sid} 失败: {e}", sid=session_id, e=e))
 
     def get_calls_info(self) -> list[dict]:
         result: list[dict] = []

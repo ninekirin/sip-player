@@ -29,6 +29,7 @@ class PersistedSettings:
     password: str = ""
     tracks: list[str] = field(default_factory=list)
     play_mode: int = 0
+    ui_locale: str = "zh_CN"
 
 
 def ensure_imports_dir() -> Path:
@@ -61,6 +62,8 @@ def _settings_from_dict(raw: dict[str, Any]) -> PersistedSettings:
         play_mode = int(pm)
     except (TypeError, ValueError):
         play_mode = base.play_mode
+    ul = raw.get("ui_locale", base.ui_locale)
+    ui_locale = str(ul).strip() if ul else base.ui_locale
     return PersistedSettings(
         id_uri=str(raw.get("id_uri", base.id_uri) or base.id_uri),
         registrar=str(raw.get("registrar", base.registrar) or base.registrar),
@@ -68,6 +71,7 @@ def _settings_from_dict(raw: dict[str, Any]) -> PersistedSettings:
         password=str(raw.get("password", base.password) or ""),
         tracks=track_strs,
         play_mode=play_mode,
+        ui_locale=ui_locale or base.ui_locale,
     )
 
 
