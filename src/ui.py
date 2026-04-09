@@ -216,7 +216,8 @@ class MainWindow:
         try:
             self.app.unregister()
         except Exception as e:
-            messagebox.showerror(_("错误"), str(e))
+            messagebox.showerror(_("错误"), translate_fmt("注销异常: {e}", e=e))
+            self._append_log(translate_fmt("注销异常: {e}", e=e))
 
     def _on_hangup(self) -> None:
         try:

@@ -150,8 +150,14 @@ class PlaybackController:
         self._sync_transmit()
 
     def cycle_mode(self) -> None:
-        self.mode = PlayMode((int(self.mode) + 1) % 4)
-        self._reload_stream()
+        old = self.mode
+        self.mode = PlayMode((int(old) + 1) % 4)
+        # 仅单曲循环与其它模式切换时需重建播放器（createPlayer 的 loop 选项不同）；
+        # 否则重载会打断当前曲目并从头播放。
+        if (old == PlayMode.LOOP_ONE) ^ (self.mode == PlayMode.LOOP_ONE):
+            self._reload_stream()
+        else:
+            self._app.notify_playback_changed()
 
     def _player_options(self) -> int:
         if self.mode == PlayMode.LOOP_ONE:
