@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext, ttk
@@ -23,6 +24,8 @@ class MainWindow:
         self.root = tk.Tk()
         self.root.title("SIP Player")
         self.root.minsize(520, 480)
+
+        self._last_save_time = time.monotonic()
 
         self._build_form()
         self._restore_settings()
@@ -57,6 +60,7 @@ class MainWindow:
         ttk.Button(bf, text="注册", command=self._on_register).pack(side=tk.LEFT, padx=4)
         ttk.Button(bf, text="注销", command=self._on_unregister).pack(side=tk.LEFT, padx=4)
         ttk.Button(bf, text="挂断来电", command=self._on_hangup).pack(side=tk.LEFT, padx=4)
+        ttk.Button(bf, text="会话管理", command=self._open_session_manager).pack(side=tk.LEFT, padx=4)
 
         self.lbl_reg = ttk.Label(f, text="未注册")
         self.lbl_reg.grid(row=5, column=0, columnspan=2, sticky=tk.W, **pad)
@@ -72,6 +76,7 @@ class MainWindow:
         sb = ttk.Scrollbar(left, orient=tk.VERTICAL, command=self.list_tracks.yview)
         self.list_tracks.config(yscrollcommand=sb.set)
         self.list_tracks.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.list_tracks.bind("<Double-1>", self._on_track_double_click)
         sb.pack(side=tk.RIGHT, fill=tk.Y)
 
         mf = ttk.Frame(row)
@@ -133,6 +138,14 @@ class MainWindow:
         except Exception as e:
             messagebox.showerror("错误", str(e))
 
+    def _on_track_double_click(self, event: tk.Event) -> None:
+        sel = self.list_tracks.curselection()
+        if sel:
+            self.app.playback.jump_to_track(sel[0])
+
+    def _open_session_manager(self) -> None:
+        SessionManagerDialog(self.root, self.app)
+
     def _sync_track_list_to_controller(self) -> None:
         paths = [self.list_tracks.get(i) for i in range(self.list_tracks.size())]
         self.app.playback.set_tracks(paths)
@@ -192,6 +205,7 @@ class MainWindow:
             self.list_tracks.insert(tk.END, str(out))
             self._append_log(f"已导入: {out.name}")
         self._sync_track_list_to_controller()
+        self._save_settings()
 
 
     def _remove_selected(self) -> None:
@@ -199,6 +213,7 @@ class MainWindow:
         for i in reversed(sel):
             self.list_tracks.delete(i)
         self._sync_track_list_to_controller()
+        self._save_settings()
 
     def _prev(self) -> None:
         self.app.playback.prev_track()
@@ -211,6 +226,7 @@ class MainWindow:
 
     def _cycle_mode(self) -> None:
         self.app.playback.cycle_mode()
+        self._save_settings()
 
     def _refresh_reg_label(self) -> None:
         self.lbl_reg.config(text=self.app.registration_status_text())
@@ -227,13 +243,20 @@ class MainWindow:
             self._append_log(f"poll 错误: {e}")
         self._refresh_reg_label()
         self._refresh_playback_label()
+        now = time.monotonic()
+        if now - self._last_save_time >= 30:
+            self._last_save_time = now
+            try:
+                self._save_settings()
+            except Exception:
+                pass
         self.root.after(40, self._poll)
 
     def _on_close(self) -> None:
         try:
             self._save_settings()
-        except OSError as e:
-            self._append_log(f"保存设置失败: {e}")
+        except Exception:
+            pass
         try:
             self.app.shutdown_stack()
         except Exception:
@@ -245,6 +268,74 @@ class MainWindow:
         self._sync_track_list_to_controller()
         self._poll()
         self.root.mainloop()
+
+
+class SessionManagerDialog:
+    """管理所有活跃 SIP 会话的弹窗。"""
+
+    def __init__(self, parent: tk.Tk, app: SipApp) -> None:
+        self._app = app
+        self._win = tk.Toplevel(parent)
+        self._win.title("会话管理")
+        self._win.minsize(420, 260)
+        self._win.transient(parent)
+
+        self._tree = ttk.Treeview(
+            self._win,
+            columns=("remote", "state", "duration"),
+            show="headings",
+            height=8,
+        )
+        self._tree.heading("remote", text="远端")
+        self._tree.heading("state", text="状态")
+        self._tree.heading("duration", text="时长(秒)")
+        self._tree.column("remote", width=220)
+        self._tree.column("state", width=100)
+        self._tree.column("duration", width=80)
+        self._tree.pack(fill=tk.BOTH, expand=True, padx=6, pady=6)
+
+        bf = ttk.Frame(self._win)
+        bf.pack(fill=tk.X, padx=6, pady=(0, 6))
+        ttk.Button(bf, text="挂断所选", command=self._hangup_selected).pack(side=tk.LEFT, padx=4)
+        ttk.Button(bf, text="挂断全部", command=self._hangup_all).pack(side=tk.LEFT, padx=4)
+        ttk.Button(bf, text="刷新", command=self._refresh).pack(side=tk.LEFT, padx=4)
+
+        self._refresh()
+        self._poll_id: str | None = self._win.after(1000, self._auto_refresh)
+        self._win.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    def _refresh(self) -> None:
+        prev_sel = set(self._tree.selection())
+        for item in self._tree.get_children():
+            self._tree.delete(item)
+        for info in self._app.get_calls_info():
+            iid = str(info["session_id"])
+            self._tree.insert(
+                "",
+                tk.END,
+                iid=iid,
+                values=(info["remote_uri"], info["state"], info["duration"]),
+            )
+            if iid in prev_sel:
+                self._tree.selection_add(iid)
+
+    def _auto_refresh(self) -> None:
+        self._refresh()
+        self._poll_id = self._win.after(1000, self._auto_refresh)
+
+    def _hangup_selected(self) -> None:
+        for item in self._tree.selection():
+            self._app.hangup_call_by_id(int(item))
+        self._win.after(500, self._refresh)
+
+    def _hangup_all(self) -> None:
+        self._app.hangup_call()
+        self._win.after(500, self._refresh)
+
+    def _on_close(self) -> None:
+        if self._poll_id:
+            self._win.after_cancel(self._poll_id)
+        self._win.destroy()
 
 
 def run_ui() -> None:

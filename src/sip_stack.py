@@ -12,9 +12,10 @@ from src.playback import PlaybackController
 
 
 class SipCall(pj.Call):
-    def __init__(self, acc: SipAccount, call_id: int, app: SipApp) -> None:
+    def __init__(self, acc: SipAccount, call_id: int, app: SipApp, session_id: int) -> None:
         pj.Call.__init__(self, acc, call_id)
         self._app = app
+        self.session_id = session_id
 
     def onCallState(self, prm: pj.OnCallStateParam) -> None:
         ci = self.getInfo()
@@ -28,7 +29,7 @@ class SipCall(pj.Call):
             mi = ci.media[i]
             if mi.type == pj.PJMEDIA_TYPE_AUDIO and mi.status == pj.PJSUA_CALL_MEDIA_ACTIVE:
                 aud = self.getAudioMedia(i)
-                self._app.playback.attach_call_audio(aud)
+                self._app.playback.add_call_audio(self.session_id, aud)
                 return
 
     def onDtmfDigit(self, prm: pj.OnDtmfDigitParam) -> None:
@@ -51,12 +52,13 @@ class SipAccount(pj.Account):
         self._app.notify_reg_changed()
 
     def onIncomingCall(self, prm: pj.OnIncomingCallParam) -> None:
-        c = SipCall(self, prm.callId, self._app)
-        self._app.set_active_call(c)
+        sid = self._app.next_session_id()
+        c = SipCall(self, prm.callId, self._app, sid)
+        self._app.add_call(c)
         op = pj.CallOpParam(True)
         op.statusCode = pj.PJSIP_SC_OK
         c.answer(op)
-        self._app.log("来电已自动接听")
+        self._app.log(f"来电已自动接听 (会话 {sid})")
 
 
 class SipApp:
@@ -67,7 +69,8 @@ class SipApp:
         self._ep = pj.Endpoint()
         self._ep.libCreate()
         self._acc: SipAccount | None = None
-        self._active_call: SipCall | None = None
+        self._active_calls: dict[int, SipCall] = {}
+        self._next_sid = 0
         self._started = False
         self._reg_cb: Callable[[], None] | None = None
         self._playback_cb: Callable[[], None] | None = None
@@ -120,8 +123,8 @@ class SipApp:
     def shutdown_stack(self) -> None:
         if not self._started:
             return
-        self.playback.attach_call_audio(None)
-        self._active_call = None
+        self.playback.detach_all_call_audio()
+        self._active_calls.clear()
         if self._acc:
             try:
                 self._acc.shutdown()
@@ -163,14 +166,19 @@ class SipApp:
             self._acc.setRegistration(False)
             self.log("已请求注销")
 
-    def set_active_call(self, call: SipCall) -> None:
-        self._active_call = call
+    def next_session_id(self) -> int:
+        sid = self._next_sid
+        self._next_sid += 1
+        return sid
+
+    def add_call(self, call: SipCall) -> None:
+        self._active_calls[call.session_id] = call
 
     def on_call_disconnected(self, call: SipCall) -> None:
-        if self._active_call is call:
-            self._active_call = None
-            self.playback.attach_call_audio(None)
-            self.log("通话已结束")
+        if call.session_id in self._active_calls:
+            del self._active_calls[call.session_id]
+            self.playback.remove_call_audio(call.session_id)
+            self.log(f"通话已结束 (会话 {call.session_id})")
 
     def handle_dtmf(self, digit: str) -> None:
         if digit == "1":
@@ -194,7 +202,40 @@ class SipApp:
         return f"未成功: {ai.regStatus} {ai.regStatusText}"
 
     def hangup_call(self) -> None:
-        if self._active_call and self._active_call.isActive():
-            prm = pj.CallOpParam(True)
-            self._active_call.hangup(prm)
-            self.log("已发送挂断")
+        if not self._active_calls:
+            self.log("当前无活跃通话")
+            return
+        for call in list(self._active_calls.values()):
+            try:
+                if call.isActive():
+                    prm = pj.CallOpParam(True)
+                    call.hangup(prm)
+            except pj.Error:
+                pass
+        self.log("已发送挂断全部")
+
+    def hangup_call_by_id(self, session_id: int) -> None:
+        call = self._active_calls.get(session_id)
+        if call:
+            try:
+                if call.isActive():
+                    prm = pj.CallOpParam(True)
+                    call.hangup(prm)
+                    self.log(f"已挂断会话 {session_id}")
+            except pj.Error as e:
+                self.log(f"挂断会话 {session_id} 失败: {e}")
+
+    def get_calls_info(self) -> list[dict]:
+        result: list[dict] = []
+        for sid, call in list(self._active_calls.items()):
+            try:
+                ci = call.getInfo()
+                result.append({
+                    "session_id": sid,
+                    "remote_uri": ci.remoteUri,
+                    "state": ci.stateText,
+                    "duration": ci.connectDuration.sec,
+                })
+            except pj.Error:
+                pass
+        return result

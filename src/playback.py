@@ -42,7 +42,7 @@ class PlaybackController:
         self.mode = PlayMode.SEQUENTIAL
         self.paused = False
         self._player: TrackAudioPlayer | None = None
-        self._call_audio: pj.AudioMedia | None = None
+        self._call_audios: dict[int, pj.AudioMedia] = {}
 
     def set_tracks(self, paths: list[str]) -> None:
         self.paths = [p for p in paths if p]
@@ -58,14 +58,24 @@ class PlaybackController:
         ps = "暂停" if self.paused else "播放"
         return f"{ps} | {name} | 模式: {mode_s} | [{self._index + 1}/{len(self.paths)}]"
 
-    def attach_call_audio(self, audio: pj.AudioMedia | None) -> None:
-        if self._player and self._call_audio and audio != self._call_audio:
-            try:
-                self._player.stopTransmit(self._call_audio)
-            except pj.Error:
-                pass
-        self._call_audio = audio
+    def add_call_audio(self, session_id: int, audio: pj.AudioMedia) -> None:
+        self._call_audios[session_id] = audio
         self._sync_transmit()
+
+    def remove_call_audio(self, session_id: int) -> None:
+        # PJSIP 会自动清理断开通话的 conference port，
+        # 此处不能对已失效的 AudioMedia 调 stopTransmit，否则可能
+        # 破坏 player 对其余通话的传输。
+        self._call_audios.pop(session_id, None)
+
+    def detach_all_call_audio(self) -> None:
+        if self._player:
+            for aud in self._call_audios.values():
+                try:
+                    self._player.stopTransmit(aud)
+                except pj.Error:
+                    pass
+        self._call_audios.clear()
 
     def _eof(self) -> None:
         if self.mode == PlayMode.LOOP_ONE:
@@ -114,6 +124,13 @@ class PlaybackController:
         self._index = (self._index - 1) % n
         self._reload_stream()
 
+    def jump_to_track(self, index: int) -> None:
+        if not self.paths or index < 0 or index >= len(self.paths):
+            return
+        self._index = index
+        self.paused = False
+        self._reload_stream()
+
     def toggle_pause(self) -> None:
         self.paused = not self.paused
         self._sync_transmit()
@@ -130,9 +147,9 @@ class PlaybackController:
     def _dispose_player(self) -> None:
         if self._player is None:
             return
-        if self._call_audio:
+        for aud in self._call_audios.values():
             try:
-                self._player.stopTransmit(self._call_audio)
+                self._player.stopTransmit(aud)
             except pj.Error:
                 pass
         self._player = None
@@ -153,15 +170,16 @@ class PlaybackController:
         self._app.notify_playback_changed()
 
     def _sync_transmit(self) -> None:
-        if self._player is None or self._call_audio is None:
+        if self._player is None or not self._call_audios:
             return
-        if self.paused:
-            try:
-                self._player.stopTransmit(self._call_audio)
-            except pj.Error:
-                pass
-            return
-        try:
-            self._player.startTransmit(self._call_audio)
-        except pj.Error as e:
-            self._app.log(f"startTransmit 失败: {e}")
+        for aud in self._call_audios.values():
+            if self.paused:
+                try:
+                    self._player.stopTransmit(aud)
+                except pj.Error:
+                    pass
+            else:
+                try:
+                    self._player.startTransmit(aud)
+                except pj.Error as e:
+                    self._app.log(f"startTransmit 失败: {e}")
