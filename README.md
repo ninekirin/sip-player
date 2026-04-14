@@ -15,6 +15,7 @@ A SIP-based music player with DTMF IVR control. Answer incoming calls automatica
 ## Requirements
 
 - **Python**: 3.12 or higher
+- **uv**: Fast Python package installer (recommended)
 - **PJSIP**: 2.16+ (with pjsua2 Python bindings)
 - **tkinter**: GUI framework
 - **ffmpeg**: For audio format conversion (optional, for import feature)
@@ -69,7 +70,13 @@ Verify:
 swig -version
 ```
 
-### Step 5: Compile PJSIP
+### Step 5: Install uv
+
+```cmd
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+### Step 6: Compile PJSIP
 
 1. Download PJSIP from [pjsip.org](https://pjsip.org/download.htm) or GitHub:
    ```cmd
@@ -94,17 +101,25 @@ swig -version
    python setup.py install
    ```
 
-### Step 6: Install ffmpeg (Optional)
+### Step 7: Install ffmpeg (Optional)
 
 For audio import feature:
 1. Download from [ffmpeg.org](https://ffmpeg.org/download.html#build-windows)
 2. Extract and add `bin` folder to PATH
 
-### Step 7: Install sip-player
+### Step 8: Install sip-player
 
 ```cmd
 cd sip-player
-pip install -e .
+
+# Create virtual environment
+uv venv
+
+# Activate virtual environment
+.venv\Scripts\activate
+
+# Install project in editable mode
+uv pip install -e .
 ```
 
 ---
@@ -153,7 +168,13 @@ pyenv install 3.12.0
 brew install swig ffmpeg
 ```
 
-### Step 4: Compile PJSIP
+### Step 4: Install uv
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+### Step 5: Compile PJSIP
 
 ```bash
 # Clone PJSIP
@@ -180,11 +201,19 @@ Verify installation:
 python3 -c "import pjsua2; print('pjsua2 OK')"
 ```
 
-### Step 5: Install sip-player
+### Step 6: Install sip-player
 
 ```bash
 cd sip-player
-pip3 install -e .
+
+# Create virtual environment
+uv venv
+
+# Activate virtual environment
+source .venv/bin/activate
+
+# Install project in editable mode
+uv pip install -e .
 ```
 
 ---
@@ -198,7 +227,7 @@ Tested on Ubuntu/Debian and Fedora/RHEL.
 ```bash
 # Install Python, tkinter, and build tools
 sudo apt update
-sudo apt install -y python3 python3-tk python3-dev build-essential swig ffmpeg
+sudo apt install -y python3 python3-tk python3-venv python3-dev build-essential swig ffmpeg curl
 
 # Install PJSIP dependencies
 sudo apt install -y libssl-dev libsrtp2-dev libopus-dev libspeex-dev libgsm1-dev
@@ -223,7 +252,7 @@ python3 -c "import pjsua2; print('pjsua2 OK')"
 
 ```bash
 # Install dependencies
-sudo dnf install -y python3 python3-tkinter python3-devel gcc gcc-c++ make swig ffmpeg openssl-devel opus-devel speex-devel gsm-devel
+sudo dnf install -y python3 python3-tkinter python3-devel gcc gcc-c++ make swig ffmpeg openssl-devel opus-devel speex-devel gsm-devel curl
 
 # Clone and build PJSIP
 git clone https://github.com/pjsip/pjproject.git
@@ -241,8 +270,20 @@ python3 setup.py install --user
 ### Install sip-player
 
 ```bash
+# Install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Clone and navigate to project
 cd sip-player
-pip3 install -e .
+
+# Create virtual environment
+uv venv
+
+# Activate virtual environment
+source .venv/bin/activate
+
+# Install project in editable mode
+uv pip install -e .
 ```
 
 ---
@@ -252,11 +293,14 @@ pip3 install -e .
 ### GUI Mode
 
 ```bash
+# Activate virtual environment first (if not already activated)
 # Windows
-python -m src
-
+.venv\Scripts\activate
 # macOS/Linux
-python3 -m src
+source .venv/bin/activate
+
+# Run the application
+python -m src
 ```
 
 Or use the installed command:
@@ -321,14 +365,25 @@ If using pyenv, reinstall Python with tcl-tk support (see Step 2 above).
 - Run commands from **x64 Native Tools Command Prompt**
 - Verify SWIG is in PATH
 
+### Virtual Environment Issues
+
+**"Module not found" errors**
+- Ensure virtual environment is activated before running
+- Reinstall with `uv pip install -e .`
+
+**uv command not found**
+- Close and reopen terminal after installing uv
+- Or add uv to PATH manually
+
 ---
 
 ## License
 
-MIT License
+MIT License - see [LICENSE](LICENSE) file.
 
 ## References
 
 - [PJSIP Documentation](https://docs.pjsip.org/)
 - [PJSIP GitHub](https://github.com/pjsip/pjproject)
 - [SWIG Documentation](https://www.swig.org/doc.html)
+- [uv Documentation](https://github.com/astral-sh/uv)

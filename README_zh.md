@@ -15,6 +15,7 @@
 ## 系统要求
 
 - **Python**: 3.12 或更高版本
+- **uv**: 快速 Python 包安装器（推荐）
 - **PJSIP**: 2.16+ (带 pjsua2 Python 绑定)
 - **tkinter**: GUI 框架
 - **ffmpeg**: 用于音频格式转换（可选，用于导入功能）
@@ -69,7 +70,13 @@ python -c "import tkinter; print('tkinter OK')"
 swig -version
 ```
 
-### 步骤 5: 编译 PJSIP
+### 步骤 5: 安装 uv
+
+```cmd
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+### 步骤 6: 编译 PJSIP
 
 1. 从 [pjsip.org](https://pjsip.org/download.htm) 或 GitHub 下载 PJSIP：
    ```cmd
@@ -94,17 +101,25 @@ swig -version
    python setup.py install
    ```
 
-### 步骤 6: 安装 ffmpeg（可选）
+### 步骤 7: 安装 ffmpeg（可选）
 
 用于音频导入功能：
 1. 从 [ffmpeg.org](https://ffmpeg.org/download.html#build-windows) 下载
 2. 解压并将 `bin` 文件夹添加到 PATH
 
-### 步骤 7: 安装 sip-player
+### 步骤 8: 安装 sip-player
 
 ```cmd
 cd sip-player
-pip install -e .
+
+# 创建虚拟环境
+uv venv
+
+# 激活虚拟环境
+.venv\Scripts\activate
+
+# 以可编辑模式安装项目
+uv pip install -e .
 ```
 
 ---
@@ -153,7 +168,13 @@ pyenv install 3.12.0
 brew install swig ffmpeg
 ```
 
-### 步骤 4: 编译 PJSIP
+### 步骤 4: 安装 uv
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+### 步骤 5: 编译 PJSIP
 
 ```bash
 # 克隆 PJSIP
@@ -180,11 +201,19 @@ python3 setup.py install
 python3 -c "import pjsua2; print('pjsua2 OK')"
 ```
 
-### 步骤 5: 安装 sip-player
+### 步骤 6: 安装 sip-player
 
 ```bash
 cd sip-player
-pip3 install -e .
+
+# 创建虚拟环境
+uv venv
+
+# 激活虚拟环境
+source .venv/bin/activate
+
+# 以可编辑模式安装项目
+uv pip install -e .
 ```
 
 ---
@@ -198,7 +227,7 @@ pip3 install -e .
 ```bash
 # 安装 Python、tkinter 和构建工具
 sudo apt update
-sudo apt install -y python3 python3-tk python3-dev build-essential swig ffmpeg
+sudo apt install -y python3 python3-tk python3-venv python3-dev build-essential swig ffmpeg curl
 
 # 安装 PJSIP 依赖
 sudo apt install -y libssl-dev libsrtp2-dev libopus-dev libspeex-dev libgsm1-dev
@@ -223,7 +252,7 @@ python3 -c "import pjsua2; print('pjsua2 OK')"
 
 ```bash
 # 安装依赖
-sudo dnf install -y python3 python3-tkinter python3-devel gcc gcc-c++ make swig ffmpeg openssl-devel opus-devel speex-devel gsm-devel
+sudo dnf install -y python3 python3-tkinter python3-devel gcc gcc-c++ make swig ffmpeg openssl-devel opus-devel speex-devel gsm-devel curl
 
 # 克隆并编译 PJSIP
 git clone https://github.com/pjsip/pjproject.git
@@ -241,8 +270,20 @@ python3 setup.py install --user
 ### 安装 sip-player
 
 ```bash
+# 安装 uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 克隆并进入项目目录
 cd sip-player
-pip3 install -e .
+
+# 创建虚拟环境
+uv venv
+
+# 激活虚拟环境
+source .venv/bin/activate
+
+# 以可编辑模式安装项目
+uv pip install -e .
 ```
 
 ---
@@ -252,11 +293,14 @@ pip3 install -e .
 ### GUI 模式
 
 ```bash
+# 先激活虚拟环境（如果尚未激活）
 # Windows
-python -m src
-
+.venv\Scripts\activate
 # macOS/Linux
-python3 -m src
+source .venv/bin/activate
+
+# 运行程序
+python -m src
 ```
 
 或使用安装的命令：
@@ -321,14 +365,25 @@ sip-player
 - 从 **x64 Native Tools 命令提示符** 运行命令
 - 验证 SWIG 已在 PATH 中
 
+### 虚拟环境问题
+
+**"Module not found" 错误**
+- 确保运行前已激活虚拟环境
+- 重新安装：`uv pip install -e .`
+
+**uv 命令未找到**
+- 安装 uv 后关闭并重新打开终端
+- 或手动将 uv 添加到 PATH
+
 ---
 
 ## 许可证
 
-MIT License
+MIT License - 详见 [LICENSE](LICENSE) 文件
 
 ## 参考资料
 
 - [PJSIP 官方文档](https://docs.pjsip.org/)
 - [PJSIP GitHub](https://github.com/pjsip/pjproject)
 - [SWIG 官方文档](https://www.swig.org/doc.html)
+- [uv 文档](https://github.com/astral-sh/uv)
